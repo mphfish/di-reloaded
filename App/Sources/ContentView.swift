@@ -66,18 +66,21 @@ struct ContentView: View {
                 Button("Try Again") { session.rescan() }
             }
         case .done:
-            HSplitView {
+            ResizableSplit(minLeading: 280, minTrailing: 320) {
                 FileOutlineView(session: session, revision: session.revision, selection: session.selection)
-                    .frame(minWidth: 300, idealWidth: 420)
+            } trailing: {
                 TreemapPane(session: session)
-                    .frame(minWidth: 320)
-                    .layoutPriority(1)
             }
         }
     }
 
     private var subtitle: String {
         guard let tree = session.tree else { return "" }
+        if session.zoomRoot != tree.root {
+            let root = tree.rootPath.hasSuffix("/") ? tree.rootPath : tree.rootPath + "/"
+            let path = String(tree.path(session.zoomRoot).dropFirst(root.count))
+            return "Zoomed into \(path) · \(Format.bytes(tree.size(session.zoomRoot)))"
+        }
         let scanned = "\(Format.bytes(tree.size(tree.root))) in \(Format.count(tree.descendantCount(tree.root))) items"
         return session.scanDuration > 0 ? "\(scanned) · scanned in \(session.scanDuration.formatted(.number.precision(.fractionLength(1))))s" : scanned
     }
@@ -85,11 +88,11 @@ struct ContentView: View {
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
-            Button("Zoom Out", systemImage: "arrow.up.left.and.arrow.down.right") { session.zoomOut() }
-                .help("Zoom out to the enclosing folder")
+            Button("Zoom Out", systemImage: "minus.magnifyingglass") { session.zoomOut() }
+                .help("Zoom out to the enclosing folder (⌘↑)")
                 .disabled(!session.canZoomOut)
-            Button("Zoom In", systemImage: "arrow.down.right.and.arrow.up.left") { session.zoomIn() }
-                .help("Zoom into the selected folder")
+            Button("Zoom In", systemImage: "plus.magnifyingglass") { session.zoomIn() }
+                .help("Zoom into the selected folder (⌘↓). Double-clicking a folder also zooms in.")
                 .disabled(!session.canZoomIn)
         }
         ToolbarItemGroup(placement: .primaryAction) {
