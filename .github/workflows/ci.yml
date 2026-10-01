@@ -13,8 +13,5 @@ jobs:
       - name: Test
         working-directory: Packages/Core
         run: swift test
-      - name: Benchmark (smoke)
-        working-directory: Packages/Core
-        run: |
-          swift build -c release
-          .build/release/dir-bench /usr --top 0
+      - name: Benchmark regression check (ScanKit vs. du)
+        run: scripts/bench-check.sh 200000 0.6

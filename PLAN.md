@@ -212,11 +212,33 @@ Findings:
   and benchmark a cold cache (`sudo purge`) and the whole `/` volume.
 
 ### Phase 1: Core engine (≈2 weeks)
-- ScanKit: parallel scanner, arena store, hard link and firmlink handling, cancellation,
-  progressive updates
-- Kind classification
-- TreemapKit layout with pixel cutoff
-- Unit tests (synthetic trees with known sizes) + benchmark in CI
+- ✅ ScanKit: parallel scanner, arena store, hard link and firmlink handling, cancellation
+- ✅ Kind classification. UTType is looked up once per unique extension, kinds that share a
+  type are merged (.jpg/.jpeg), and kinds are ranked by total size. Packages (.app etc.) are
+  flagged. Cost: ~35 ms per 1M entries.
+- ✅ TreemapKit layout with pixel cutoff
+- ✅ Unit tests (synthetic trees with known sizes), plus a CI benchmark check against `du`
+  on the same runner (`scripts/bench-check.sh`, which fails above 0.6× of du's time)
+- ⏩ Progressive results (a partial tree while scanning) moved to Phase 2, where the UI
+  that consumes them gets built
+- ⏳ Cold-cache benchmark (needs `sudo purge`)
+
+**Phase 1 measurements (M5)**
+
+| Tree | Entries | ScanKit | Notes |
+|---|---|---|---|
+| Whole disk `/` | 2.15M | **8.1 s** | 53 bytes/entry, peak RSS 357 MB, layout 2.1 ms |
+| Data volume | 1.67M | 5.3 s | Same total as via `/`, so the firmlink handling loses nothing |
+| Fixture, 200k files, fully cached | 210k | 0.13 s | 0.40× of `du` |
+
+**Finding: the scan finds 291 GB, but `df` reports ~440 GB used.** Scanning without root
+leaves 408 directories unreadable: `/private` (root-only system data) and protected parts
+of `~/Library`. Sealed system snapshots and purgeable space also count toward used space
+in ways userspace can't attribute. This makes two features matter more:
+- **"Unaccounted space" block** (used minus scanned) in the treemap, with an explanation
+  (Phase 2)
+- **Scan as administrator**: an optional privileged helper via `SMAppService` that scans as
+  root (v1.x)
 
 ### Phase 2: MVP app (≈2–3 weeks)
 - Volume picker / open folder, scan progress UI

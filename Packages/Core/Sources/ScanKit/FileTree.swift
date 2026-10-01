@@ -21,6 +21,8 @@ public struct FileTree: Sendable {
         public static let hardLinkDuplicate = Flags(rawValue: 1 << 4)
         /// A directory that was excluded from the scan (e.g. the firmlinked Data volume).
         public static let excluded     = Flags(rawValue: 1 << 5)
+        /// A directory macOS presents as a single file, such as an .app or .photoslibrary.
+        public static let package      = Flags(rawValue: 1 << 6)
     }
 
     public let rootPath: String
@@ -34,6 +36,10 @@ public struct FileTree: Sendable {
     let nameLengths: [UInt16]
     let flagBits: [UInt8]
     let nameBytes: [UInt8]
+    let kindIndices: [UInt16]
+
+    /// Totals per kind of file, largest first.
+    public let kinds: KindTable
 
     public var count: Int { sizes.count }
     public var root: NodeID { 0 }
@@ -41,6 +47,14 @@ public struct FileTree: Sendable {
     public func size(_ id: NodeID) -> UInt64 { sizes[id] }
     public func flags(_ id: NodeID) -> Flags { Flags(rawValue: flagBits[id]) }
     public func isDirectory(_ id: NodeID) -> Bool { flags(id).contains(.directory) }
+
+    /// The file's kind, or nil for directories.
+    public func kindID(_ id: NodeID) -> Int? {
+        let kind = kindIndices[id]
+        return kind == KindClassifier.directoryKind ? nil : Int(kind)
+    }
+
+    public func kind(_ id: NodeID) -> FileKind? { kindID(id).map { kinds[$0] } }
 
     /// Number of files and directories below this node (not counting the node itself).
     public func descendantCount(_ id: NodeID) -> Int { Int(descendantCounts[id]) }
@@ -86,6 +100,6 @@ public struct FileTree: Sendable {
     public var memoryFootprint: Int {
         parents.count * 4 + firstChildren.count * 4 + childCounts.count * 4 + sizes.count * 8
             + descendantCounts.count * 4 + nameOffsets.count * 4 + nameLengths.count * 2
-            + flagBits.count + nameBytes.count
+            + flagBits.count + nameBytes.count + kindIndices.count * 2
     }
 }

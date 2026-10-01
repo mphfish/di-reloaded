@@ -11,22 +11,19 @@ public enum TreemapImageRenderer {
     static let ambient = 0.2
     static let diffuse = 0.8
 
+    /// Colors for the largest kinds, in rank order. Smaller kinds share `otherColor`.
+    /// Placeholder until the app's palette (light/dark, user overrides) exists.
     static let palette: [(Double, Double, Double)] = [
-        (0.95, 0.35, 0.30), (0.25, 0.60, 0.95), (0.35, 0.80, 0.40), (0.95, 0.75, 0.25),
-        (0.70, 0.45, 0.90), (0.20, 0.80, 0.80), (0.95, 0.50, 0.75), (0.60, 0.75, 0.30),
-        (0.95, 0.60, 0.20), (0.45, 0.50, 0.95), (0.80, 0.30, 0.50), (0.55, 0.55, 0.55),
+        (0.25, 0.55, 0.95), (0.95, 0.35, 0.30), (0.35, 0.78, 0.40), (0.95, 0.75, 0.25),
+        (0.70, 0.45, 0.90), (0.20, 0.78, 0.80), (0.95, 0.50, 0.75), (0.60, 0.75, 0.30),
+        (0.95, 0.60, 0.20), (0.45, 0.50, 0.95), (0.80, 0.30, 0.50), (0.55, 0.65, 0.75),
     ]
+    static let otherColor = (0.62, 0.62, 0.62)
+    static let directoryColor = (0.45, 0.45, 0.45)
 
-    /// Placeholder coloring until kind classification lands: hash of the file extension.
     static func color(for node: FileTree.NodeID, in tree: FileTree) -> (Double, Double, Double) {
-        if tree.isDirectory(node) { return (0.5, 0.5, 0.5) }
-        let hash: UInt32 = tree.withNameBytes(node) { bytes in
-            guard let dot = bytes.lastIndex(of: UInt8(ascii: ".")), dot > 0 else { return 0 }
-            var h: UInt32 = 2166136261
-            for byte in bytes[(dot + 1)...] { h = (h ^ UInt32(byte | 0x20)) &* 16777619 }
-            return h
-        }
-        return palette[Int(hash % UInt32(palette.count))]
+        guard let kind = tree.kindID(node) else { return directoryColor }
+        return kind < palette.count ? palette[kind] : otherColor
     }
 
     public static func render(layout: [TreemapItem], tree: FileTree, size: TreemapRect) -> CGImage? {

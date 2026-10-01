@@ -107,17 +107,28 @@ enum TreeAssembler {
 
         func permute<T>(_ values: [T]) -> [T] { order.map { values[Int($0)] } }
 
+        let finalSizes = permute(size)
+        let finalNameOffsets = permute(nameOffset)
+        let finalNameLengths = permute(nameLength)
+        var finalFlags = permute(flags)
+        let kinds = KindClassifier.classify(
+            nameBytes: nameBytes, nameOffsets: finalNameOffsets, nameLengths: finalNameLengths,
+            sizes: finalSizes, flags: &finalFlags
+        )
+
         return FileTree(
             rootPath: rootPath,
             parents: finalParent,
             firstChildren: firstChild,
             childCounts: childCount,
-            sizes: permute(size),
+            sizes: finalSizes,
             descendantCounts: permute(descendants),
-            nameOffsets: permute(nameOffset),
-            nameLengths: permute(nameLength),
-            flagBits: permute(flags),
-            nameBytes: nameBytes
+            nameOffsets: finalNameOffsets,
+            nameLengths: finalNameLengths,
+            flagBits: finalFlags,
+            nameBytes: nameBytes,
+            kindIndices: kinds.kindOfNode,
+            kinds: kinds.table
         )
     }
 
