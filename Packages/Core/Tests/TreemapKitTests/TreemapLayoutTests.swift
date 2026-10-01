@@ -86,3 +86,40 @@ import Testing
         #expect(TreemapLayout.hitTest(items, x: 150, y: 50) == nil)
     }
 }
+
+@Suite struct TreemapExtrasTests {
+    @Test func extrasAreLaidOutBesideRootChildren() throws {
+        let root = NSTemporaryDirectory() + "treemap-" + UUID().uuidString
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        try FileManager.default.createDirectory(atPath: root, withIntermediateDirectories: true)
+        try Data(count: 1_000).write(to: URL(fileURLWithPath: root + "/file"))
+        var options = ScanOptions()
+        options.sizeMode = .logical
+        let tree = try Scanner.scan(path: root, options: options)
+
+        let bounds = TreemapRect(x: 0, y: 0, width: 400, height: 100)
+        let items = TreemapLayout.layout(tree: tree, root: tree.root, in: bounds, extras: [3_000])
+        let extra = try #require(items.first { $0.extraIndex == 0 })
+        #expect(abs(extra.rect.area - bounds.area * 0.75) < 0.01)
+        let file = try #require(items.first { $0.node > 0 })
+        #expect(abs(file.rect.area - bounds.area * 0.25) < 0.01)
+    }
+
+    @Test func removedNodesDisappearFromLayout() throws {
+        let root = NSTemporaryDirectory() + "treemap-" + UUID().uuidString
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        try FileManager.default.createDirectory(atPath: root, withIntermediateDirectories: true)
+        try Data(count: 1_000).write(to: URL(fileURLWithPath: root + "/a"))
+        try Data(count: 2_000).write(to: URL(fileURLWithPath: root + "/b"))
+        var options = ScanOptions()
+        options.sizeMode = .logical
+        var tree = try Scanner.scan(path: root, options: options)
+        let b = try #require(tree.children(tree.root).first { tree.name($0) == "b" })
+        tree.remove(b)
+
+        let items = TreemapLayout.layout(tree: tree, root: tree.root, in: TreemapRect(x: 0, y: 0, width: 100, height: 100))
+        #expect(items.map(\.node).contains(b) == false)
+        #expect(items.count == 2)
+        #expect(abs(items[1].rect.area - 10_000) < 0.01) // "a" now fills everything
+    }
+}

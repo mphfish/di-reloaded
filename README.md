@@ -11,7 +11,16 @@ the work of Tjark Derlien. This project isn't affiliated with it, just fond of i
 
 ## Building
 
-Requires Xcode 26+ and macOS 15+.
+Requires Xcode 26+, macOS 15+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen)
+(`brew install xcodegen`). The Xcode project is generated from `project.yml`.
+
+```sh
+xcodegen generate && open DIReloaded.xcodeproj   # the app
+```
+
+Debug builds accept `-scan <path>` to start scanning at launch.
+
+The core engine is a Swift package and can be built and tested without the app:
 
 ```sh
 cd Packages/Core

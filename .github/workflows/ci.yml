@@ -15,3 +15,9 @@ jobs:
         run: swift test
       - name: Benchmark regression check (ScanKit vs. du)
         run: scripts/bench-check.sh 200000 0.6
+      - name: Build app
+        run: |
+          brew install xcodegen
+          xcodegen generate
+          xcodebuild -project DIReloaded.xcodeproj -scheme DIReloaded -configuration Release \
+            -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO build

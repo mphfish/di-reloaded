@@ -23,6 +23,9 @@ public struct FileTree: Sendable {
         public static let excluded     = Flags(rawValue: 1 << 5)
         /// A directory macOS presents as a single file, such as an .app or .photoslibrary.
         public static let package      = Flags(rawValue: 1 << 6)
+        /// Some descendant was removed, so this directory's children may no longer be in
+        /// size order. Use `sortedChildren(_:)`.
+        public static let reordered    = Flags(rawValue: 1 << 7)
     }
 
     public let rootPath: String
@@ -30,16 +33,19 @@ public struct FileTree: Sendable {
     let parents: [UInt32]
     let firstChildren: [UInt32]
     let childCounts: [UInt32]
-    let sizes: [UInt64]
-    let descendantCounts: [UInt32]
+    var sizes: [UInt64]
+    var descendantCounts: [UInt32]
     let nameOffsets: [UInt32]
     let nameLengths: [UInt16]
-    let flagBits: [UInt8]
+    var flagBits: [UInt8]
     let nameBytes: [UInt8]
     let kindIndices: [UInt16]
 
     /// Totals per kind of file, largest first.
-    public let kinds: KindTable
+    public internal(set) var kinds: KindTable
+
+    /// Nodes removed with `remove(_:)`. Their descendants are unreachable too.
+    var removedNodes: Set<Int> = []
 
     public var count: Int { sizes.count }
     public var root: NodeID { 0 }
@@ -67,6 +73,42 @@ public struct FileTree: Sendable {
     public func children(_ id: NodeID) -> Range<NodeID> {
         let start = Int(firstChildren[id])
         return start ..< start + Int(childCounts[id])
+    }
+
+    public func isRemoved(_ id: NodeID) -> Bool { removedNodes.contains(id) }
+
+    /// Children that haven't been removed, largest first.
+    public func sortedChildren(_ id: NodeID) -> [NodeID] {
+        let range = children(id)
+        if !flags(id).contains(.reordered) { return Array(range) }
+        return range.filter { !removedNodes.contains($0) }.sorted { sizes[$0] > sizes[$1] }
+    }
+
+    /// Removes a node, for example after moving it to the Trash: subtracts its size,
+    /// item count and kind totals from everything above it. Node ids stay valid.
+    public mutating func remove(_ id: NodeID) {
+        guard id != root, !isRemoved(id) else { return }
+
+        var stack = [id]
+        while let node = stack.popLast() {
+            if let kind = kindID(node) {
+                kinds.all[kind].totalSize -= sizes[node]
+                kinds.all[kind].fileCount -= 1
+            }
+            for child in children(node) where !removedNodes.contains(child) { stack.append(child) }
+        }
+        removedNodes.insert(id)
+
+        let removedSize = sizes[id]
+        let removedCount = descendantCounts[id] + 1
+        var ancestor = Int(parents[id])
+        while true {
+            sizes[ancestor] -= removedSize
+            descendantCounts[ancestor] -= removedCount
+            flagBits[ancestor] |= Flags.reordered.rawValue
+            if ancestor == root { break }
+            ancestor = Int(parents[ancestor])
+        }
     }
 
     public func name(_ id: NodeID) -> String {

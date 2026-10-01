@@ -15,13 +15,13 @@ public struct FileKind: Sendable, Identifiable {
     /// extensions the system doesn't know.
     public let typeIdentifier: String?
     public let category: Category
-    public let totalSize: UInt64
-    public let fileCount: Int
+    public internal(set) var totalSize: UInt64
+    public internal(set) var fileCount: Int
 }
 
 public struct KindTable: Sendable {
     /// All kinds, largest total size first. A kind's `id` is its index here.
-    public let all: [FileKind]
+    public internal(set) var all: [FileKind]
 
     public subscript(id: Int) -> FileKind { all[id] }
 }

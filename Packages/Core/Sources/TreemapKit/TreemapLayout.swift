@@ -43,9 +43,12 @@ public struct Cushion: Sendable, Equatable {
 
 public struct TreemapItem: Sendable {
     public var rect: TreemapRect
+    /// A node of the tree, or a negative value for an extra block: -1 is `extras[0]`.
     public var node: FileTree.NodeID
     public var depth: Int
     public var cushion: Cushion
+
+    public var extraIndex: Int? { node < 0 ? -node - 1 : nil }
 }
 
 public enum TreemapLayout {
@@ -58,7 +61,12 @@ public enum TreemapLayout {
     /// Lays out the subtree under `root` with the squarified algorithm
     /// (Bruls, Huizing & van Wijk, 2000). Items are returned parent-first, so painting them
     /// in order draws children over their parent.
-    public static func layout(tree: FileTree, root: FileTree.NodeID, in bounds: TreemapRect) -> [TreemapItem] {
+    ///
+    /// `extras` are sizes of blocks that aren't files, such as free space, laid out next to
+    /// the root's children.
+    public static func layout(
+        tree: FileTree, root: FileTree.NodeID, in bounds: TreemapRect, extras: [UInt64] = []
+    ) -> [TreemapItem] {
         var items: [TreemapItem] = []
         items.reserveCapacity(Int(min(Double(tree.count), bounds.area / 4)))
 
@@ -66,43 +74,59 @@ public enum TreemapLayout {
         rootCushion.addRidge(bounds, height: initialHeight)
         items.append(TreemapItem(rect: bounds, node: root, depth: 0, cushion: rootCushion))
 
+        func size(_ node: Int) -> UInt64 { node >= 0 ? tree.size(node) : extras[-node - 1] }
+
         // Indices into `items` whose children still need laying out.
         var stack = [0]
+        var children: [Int] = []
         var row: [(node: FileTree.NodeID, area: Double)] = []
 
         while let index = stack.popLast() {
             let parent = items[index]
-            let total = Double(tree.size(parent.node))
-            guard tree.isDirectory(parent.node), total > 0 else { continue }
+            let isTop = index == 0
+            let total = Double(tree.size(parent.node) + (isTop ? extras.reduce(0, +) : 0))
+            guard parent.node >= 0, tree.isDirectory(parent.node), total > 0 else { continue }
 
             let scale = parent.rect.area / total
+            // Gather children in size order, stopping at the first one too small to show.
+            children.removeAll(keepingCapacity: true)
+            if tree.flags(parent.node).contains(.reordered) || (isTop && !extras.isEmpty) {
+                children.append(contentsOf: tree.sortedChildren(parent.node))
+                if isTop {
+                    children.append(contentsOf: extras.indices.map { -$0 - 1 })
+                    children.sort { size($0) > size($1) }
+                }
+            } else {
+                for child in tree.children(parent.node) {
+                    if Double(tree.size(child)) * scale < minimumArea { break }
+                    children.append(child)
+                }
+            }
+
             let childHeight = initialHeight * pow(heightFactor, Double(parent.depth + 1))
             var free = parent.rect
-            let children = tree.children(parent.node)
-            var next = children.lowerBound
+            var next = 0
 
-            while next < children.upperBound {
-                // Children are sorted largest first, so everything after a too-small child
-                // is too small as well.
-                let firstArea = Double(tree.size(next)) * scale
+            while next < children.count {
+                let firstArea = Double(size(children[next])) * scale
                 if firstArea < minimumArea { break }
 
                 let side = min(free.width, free.height)
                 guard side > 0 else { break }
 
                 row.removeAll(keepingCapacity: true)
-                row.append((next, firstArea))
+                row.append((children[next], firstArea))
                 var rowArea = firstArea
                 var rowMin = firstArea, rowMax = firstArea
                 next += 1
 
-                while next < children.upperBound {
-                    let area = Double(tree.size(next)) * scale
+                while next < children.count {
+                    let area = Double(size(children[next])) * scale
                     if area < minimumArea { break }
                     let current = worstRatio(sum: rowArea, min: rowMin, max: rowMax, side: side)
                     let candidate = worstRatio(sum: rowArea + area, min: Swift.min(rowMin, area), max: Swift.max(rowMax, area), side: side)
                     if candidate > current { break }
-                    row.append((next, area))
+                    row.append((children[next], area))
                     rowArea += area
                     rowMin = Swift.min(rowMin, area)
                     rowMax = Swift.max(rowMax, area)
@@ -123,7 +147,7 @@ public enum TreemapLayout {
                     var cushion = parent.cushion
                     cushion.addRidge(rect, height: childHeight)
                     items.append(TreemapItem(rect: rect, node: node, depth: parent.depth + 1, cushion: cushion))
-                    if tree.isDirectory(node), rect.width >= 1, rect.height >= 1 {
+                    if node >= 0, tree.isDirectory(node), rect.width >= 1, rect.height >= 1 {
                         stack.append(items.count - 1)
                     }
                 }

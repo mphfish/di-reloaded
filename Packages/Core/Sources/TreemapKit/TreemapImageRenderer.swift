@@ -11,27 +11,13 @@ public enum TreemapImageRenderer {
     static let ambient = 0.2
     static let diffuse = 0.8
 
-    /// Colors for the largest kinds, in rank order. Smaller kinds share `otherColor`.
-    /// Placeholder until the app's palette (light/dark, user overrides) exists.
-    static let palette: [(Double, Double, Double)] = [
-        (0.25, 0.55, 0.95), (0.95, 0.35, 0.30), (0.35, 0.78, 0.40), (0.95, 0.75, 0.25),
-        (0.70, 0.45, 0.90), (0.20, 0.78, 0.80), (0.95, 0.50, 0.75), (0.60, 0.75, 0.30),
-        (0.95, 0.60, 0.20), (0.45, 0.50, 0.95), (0.80, 0.30, 0.50), (0.55, 0.65, 0.75),
-    ]
-    static let otherColor = (0.62, 0.62, 0.62)
-    static let directoryColor = (0.45, 0.45, 0.45)
-
-    static func color(for node: FileTree.NodeID, in tree: FileTree) -> (Double, Double, Double) {
-        guard let kind = tree.kindID(node) else { return directoryColor }
-        return kind < palette.count ? palette[kind] : otherColor
-    }
-
     public static func render(layout: [TreemapItem], tree: FileTree, size: TreemapRect) -> CGImage? {
         let width = Int(size.width), height = Int(size.height)
         var pixels = [UInt32](repeating: 0xFF000000, count: width * height)
 
         for item in layout {
-            let (r, g, b) = color(for: item.node, in: tree)
+            let color = TreemapPalette.color(for: item.node, in: tree)
+            let (r, g, b) = (color.r, color.g, color.b)
             let c = item.cushion
             let x0 = max(0, Int(item.rect.x.rounded())), x1 = min(width, Int((item.rect.x + item.rect.width).rounded()))
             let y0 = max(0, Int(item.rect.y.rounded())), y1 = min(height, Int((item.rect.y + item.rect.height).rounded()))

@@ -1,0 +1,48 @@
+name: DIReloaded
+options:
+  bundleIdPrefix: com.mphfish
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+packages:
+  Core:
+    path: Packages/Core
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  DIReloaded:
+    type: application
+    platform: macOS
+    sources:
+      - App/Sources
+      - App/Resources
+    dependencies:
+      - package: Core
+        product: ScanKit
+      - package: Core
+        product: TreemapKit
+      - package: Core
+        product: TreemapView
+    settings:
+      base:
+        PRODUCT_NAME: DI Reloaded
+        PRODUCT_BUNDLE_IDENTIFIER: com.mphfish.DIReloaded
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: DI Reloaded
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Mike Fisher. MIT License."
+        INFOPLIST_KEY_NSDesktopFolderUsageDescription: DI Reloaded measures the files on your Desktop to show what takes up space.
+        INFOPLIST_KEY_NSDocumentsFolderUsageDescription: DI Reloaded measures the files in Documents to show what takes up space.
+        INFOPLIST_KEY_NSDownloadsFolderUsageDescription: DI Reloaded measures the files in Downloads to show what takes up space.
+        INFOPLIST_KEY_NSRemovableVolumesUsageDescription: DI Reloaded measures the files on removable drives to show what takes up space.
+        INFOPLIST_KEY_NSNetworkVolumesUsageDescription: DI Reloaded measures the files on network drives to show what takes up space.
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        SWIFT_STRICT_CONCURRENCY: complete
+        ARCHS: "$(ARCHS_STANDARD)"
