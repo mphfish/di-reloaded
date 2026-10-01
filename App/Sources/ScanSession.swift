@@ -51,6 +51,8 @@ final class ScanSession {
     /// True when nothing new has been found for a while, usually because macOS is waiting
     /// for the user to answer a folder access prompt.
     private(set) var scanSeemsStalled = false
+    /// Space found so far under each top-level folder.
+    private(set) var scanTopLevel: [ScanProgress.TopLevelEntry] = []
 
     @ObservationIgnored private var progress: ScanProgress?
     @ObservationIgnored private var scanTask: Task<Void, Never>?
@@ -68,6 +70,7 @@ final class ScanSession {
         scannedFiles = 0
         scannedBytes = 0
         scanSeemsStalled = false
+        scanTopLevel = []
         scanStarted = .now
         phase = .scanning
 
@@ -83,7 +86,8 @@ final class ScanSession {
                     scannedFiles = progress.files
                     scannedBytes = progress.bytes
                     scanSeemsStalled = ContinuousClock.now - lastChange > .seconds(2)
-                    try? await Task.sleep(for: .milliseconds(100))
+                    scanTopLevel = progress.topLevelSnapshot()
+                    try? await Task.sleep(for: .milliseconds(150))
                 }
             }
             let result = await Task.detached(priority: .userInitiated) {

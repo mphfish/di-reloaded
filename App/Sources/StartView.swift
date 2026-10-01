@@ -1,3 +1,4 @@
+import ScanKit
 import SwiftUI
 
 /// Shown before the first scan: pick a volume or folder.
@@ -114,6 +115,8 @@ struct ScanningView: View {
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
                 .contentTransition(.numericText())
+            LiveBreakdown(entries: session.scanTopLevel)
+                .frame(width: 480)
             if session.scanSeemsStalled {
                 Label("If macOS is asking for permission to access a folder, allow it to continue. Full Disk Access avoids these prompts.",
                       systemImage: "hand.raised")
@@ -128,6 +131,44 @@ struct ScanningView: View {
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// The largest top-level folders found so far, as bars that grow while the scan runs.
+struct LiveBreakdown: View {
+    let entries: [ScanProgress.TopLevelEntry]
+    private let limit = 8
+
+    var body: some View {
+        let shown = Array(entries.prefix(limit))
+        let largest = Double(shown.first?.bytes ?? 1)
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(shown) { entry in
+                HStack(spacing: 10) {
+                    Image(systemName: entry.isDirectory ? "folder.fill" : "doc.on.doc.fill")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 16)
+                    Text(entry.name)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(width: 140, alignment: .leading)
+                    GeometryReader { proxy in
+                        Capsule()
+                            .fill(Color.accentColor.gradient)
+                            .frame(width: max(4, proxy.size.width * Double(entry.bytes) / largest))
+                    }
+                    .frame(height: 8)
+                    Text(Format.bytes(entry.bytes))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .frame(width: 80, alignment: .trailing)
+                }
+                .font(.callout)
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .animation(.smooth(duration: 0.3), value: shown.map(\.bytes))
+        .padding(.top, 8)
     }
 }
 

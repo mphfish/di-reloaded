@@ -38,6 +38,38 @@ public final class ScanProgress: Sendable {
     public var isCancelled: Bool { cancelled.load(ordering: .relaxed) }
 
     public func cancel() { cancelled.store(true, ordering: .relaxed) }
+
+    /// Space found so far under each item at the top of the scanned folder.
+    public struct TopLevelEntry: Sendable, Identifiable {
+        public var id: String { name }
+        public let name: String
+        public let bytes: UInt64
+        public let isDirectory: Bool
+    }
+
+    let topLevel = Mutex<[TopLevelCounter]>([])
+
+    /// A live breakdown by top-level folder, largest first. Loose files directly in the
+    /// scanned folder are grouped into one entry.
+    public func topLevelSnapshot() -> [TopLevelEntry] {
+        topLevel.withLock { counters in
+            counters.map { TopLevelEntry(name: $0.name, bytes: $0.bytes.load(ordering: .relaxed), isDirectory: $0.isDirectory) }
+        }
+        .filter { $0.bytes > 0 }
+        .sorted { $0.bytes > $1.bytes }
+    }
+}
+
+/// Bytes found under one top-level item, added to by any worker.
+final class TopLevelCounter: Sendable {
+    let name: String
+    let isDirectory: Bool
+    let bytes = Atomic<UInt64>(0)
+
+    init(name: String, isDirectory: Bool) {
+        self.name = name
+        self.isDirectory = isDirectory
+    }
 }
 
 public enum ScanError: Error, Equatable {
@@ -84,6 +116,8 @@ public enum Scanner {
 struct DirectoryJob {
     let id: UInt32
     let path: String
+    /// The top-level folder this directory is under; nil for the root itself.
+    let topLevel: TopLevelCounter?
 }
 
 /// Entries one worker found. Each entry belongs to a directory identified by its job id.
@@ -146,7 +180,7 @@ final class ScanContext: @unchecked Sendable {
     }
 
     func run() {
-        queue.append(DirectoryJob(id: 0, path: rootPath))
+        queue.append(DirectoryJob(id: 0, path: rootPath, topLevel: nil))
         pending = 1
 
         let threadCount = max(1, options.threads)
@@ -177,14 +211,14 @@ final class ScanContext: @unchecked Sendable {
     }
 
     /// Assigns ids to newly found subdirectories and marks the current job finished.
-    private func finish(adding paths: [String], ids: inout [UInt32]) {
+    private func finish(adding paths: [String], topLevel: [TopLevelCounter?], ids: inout [UInt32]) {
         condition.lock()
         defer { condition.unlock() }
-        for path in paths {
+        for (index, path) in paths.enumerated() {
             let id = nextDirectoryID
             nextDirectoryID += 1
             ids.append(id)
-            queue.append(DirectoryJob(id: id, path: path))
+            queue.append(DirectoryJob(id: id, path: path, topLevel: topLevel[index]))
         }
         pending += paths.count - 1
         if !paths.isEmpty || pending == 0 {
@@ -215,7 +249,7 @@ final class ScanContext: @unchecked Sendable {
             newIDs.removeAll(keepingCapacity: true)
 
             if progress.isCancelled {
-                finish(adding: [], ids: &newIDs)
+                finish(adding: [], topLevel: [], ids: &newIDs)
                 continue
             }
 
@@ -223,12 +257,16 @@ final class ScanContext: @unchecked Sendable {
             let fd = open(job.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
             if fd < 0 {
                 output.directoryFlags.append((job.id, FileTree.Flags.inaccessible.rawValue))
-                finish(adding: [], ids: &newIDs)
+                finish(adding: [], topLevel: [], ids: &newIDs)
                 continue
             }
 
             var fileCount = 0
             var byteCount: UInt64 = 0
+            let isRoot = job.topLevel == nil
+            var childTopLevel: [TopLevelCounter?] = []
+            // Loose files in the root share one counter.
+            let rootFiles = isRoot ? TopLevelCounter(name: "Files", isDirectory: false) : nil
             let prefix = job.path == "/" ? "" : job.path
 
             while true {
@@ -255,6 +293,7 @@ final class ScanContext: @unchecked Sendable {
                         }
                         if flags == .directory {
                             subdirectoryPaths.append(path)
+                            childTopLevel.append(isRoot ? TopLevelCounter(name: String(decoding: name, as: UTF8.self), isDirectory: true) : job.topLevel)
                             subdirectoryNames.append((scratchNames.count, name.count))
                             scratchNames.append(contentsOf: name)
                         } else {
@@ -281,8 +320,15 @@ final class ScanContext: @unchecked Sendable {
 
             progress.filesCounter.add(fileCount, ordering: .relaxed)
             progress.bytesCounter.add(byteCount, ordering: .relaxed)
+            if let rootFiles {
+                rootFiles.bytes.store(byteCount, ordering: .relaxed)
+                let counters = childTopLevel.compactMap { $0 } + [rootFiles]
+                progress.topLevel.withLock { $0 = counters }
+            } else {
+                job.topLevel?.bytes.add(byteCount, ordering: .relaxed)
+            }
 
-            finish(adding: subdirectoryPaths, ids: &newIDs)
+            finish(adding: subdirectoryPaths, topLevel: childTopLevel, ids: &newIDs)
             scratchNames.withUnsafeBytes { bytes in
                 for (index, id) in newIDs.enumerated() {
                     let range = subdirectoryNames[index]

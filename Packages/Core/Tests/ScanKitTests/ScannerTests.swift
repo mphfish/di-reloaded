@@ -160,3 +160,24 @@ func node(named name: String, under parent: FileTree.NodeID, in tree: FileTree) 
         #expect(tree.children(photos).map(tree.name) == ["résumé.pdf"])
     }
 }
+
+@Suite struct ProgressTests {
+    @Test func topLevelSnapshotMatchesFinalTree() throws {
+        let fixture = try Fixture()
+        try fixture.file("photos/a/b/c.jpg", bytes: 9_000)
+        try fixture.file("photos/d.jpg", bytes: 1_000)
+        try fixture.file("code/main.swift", bytes: 500)
+        try fixture.file("loose1.txt", bytes: 30)
+        try fixture.file("loose2.txt", bytes: 20)
+        try fixture.directory("empty")
+
+        let progress = ScanProgress()
+        let tree = try Scanner.scan(path: fixture.root, options: logicalOptions(), progress: progress)
+        let snapshot = progress.topLevelSnapshot()
+
+        #expect(snapshot.map(\.name) == ["photos", "code", "Files"])
+        #expect(snapshot.map(\.bytes) == [10_000, 500, 50])
+        #expect(snapshot.map(\.bytes).reduce(0, +) == tree.size(tree.root))
+        #expect(snapshot.last?.isDirectory == false)
+    }
+}

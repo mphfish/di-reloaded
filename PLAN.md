@@ -241,12 +241,18 @@ in ways userspace can't attribute. This makes two features matter more:
   root (v1.x)
 
 ### Phase 2: MVP app (≈2–3 weeks)
-- Volume picker / open folder, scan progress UI
-- Metal cushion treemap with hover, select, and zoom
-- NSOutlineView synced with treemap selection
-- Kinds sidebar with highlighting
-- Reveal in Finder, Quick Look, Move to Trash with in-place tree update
-- FDA onboarding
+- ✅ Volume picker and Open Folder; scan progress with a **live breakdown by top-level
+  folder** (atomic per-folder counters, no partial tree needed) and a hint when a privacy
+  prompt is blocking the scan
+- ✅ Metal treemap with hover, select, zoom, kind highlighting and context menus
+- ✅ NSOutlineView synced with treemap selection in both directions
+- ✅ Kinds sidebar with highlighting; free and unaccounted space blocks
+- ✅ Show in Finder, Quick Look, Copy Path, Move to Trash with in-place tree update
+- ✅ Full Disk Access onboarding; folder usage descriptions in Info.plist
+- ✅ Fixed: `HSplitView` misplaced the file list inside the macOS 26 split view, so it
+  was replaced with a SwiftUI split
+- ⏩ **Treemap visual redesign** moved to Phase 4. The cushion shading inherited from DIX
+  looks dated and will be replaced with a modern look rather than tuned.
 
 ### Phase 3: Distribution pipeline (≈1 week, can run alongside Phase 2)
 - Signing, notarization, DMG, GitHub Actions release workflow
@@ -254,6 +260,8 @@ in ways userspace can't attribute. This makes two features matter more:
 - First `v0.1.0` pre-release on GitHub
 
 ### Phase 4: Polish and v1.0 (≈2 weeks)
+- **Modern treemap visuals** replacing the DIX-style cushions (flat or rounded tiles,
+  system colors, labels on large tiles, light and dark mode)
 - Liquid Glass and visual polish, app icon, settings (colors, logical vs. allocated size,
   package handling)
 - Accessibility pass, localization scaffolding
